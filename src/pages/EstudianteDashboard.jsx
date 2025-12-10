@@ -31,12 +31,14 @@ const EstudianteDashboard = () => {
         const userID = decodedToken.id;
         const email = decodedToken.email;
         const role = decodedToken.role;
+        const name = decodedToken.name;
+
         
         // Normalizar la estructura para que sea compatible con el sistema
         const normalizedUser = {
           id: userID,
           email: email,
-          name: email.split('@')[0], // Usar la parte antes del @ como nombre temporal
+          name: name, // Usar la parte antes del @ como nombre temporal
           role: role === 'alumno' || role === 'estudiante' ? 'student' : role,
           student: {
             id: userID,
