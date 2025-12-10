@@ -12,11 +12,20 @@ const MisSolicitudes = () => {
   const { user } = useAuth();
   const { solicitudes, actualizarSolicitud } = useAppData();
 
-  const studentId = user?.student?.id;
+  // Obtener el studentId de diferentes ubicaciones posibles
+  const studentId = user?.student?.id || user?.id || user?.student?.studentCode;
 
-  const misSolicitudes = solicitudes.filter(s => 
-    s.studentId === studentId && ['pending', 'accepted', 'rescheduled'].includes(s.status)
-  );
+  const misSolicitudes = solicitudes.filter(s => {
+    // Comparar considerando que pueden ser strings o números
+    const solicitudStudentId = String(s.studentId);
+    const currentStudentId = String(studentId);
+    
+    return solicitudStudentId === currentStudentId && 
+           ['pending', 'accepted', 'rescheduled'].includes(s.status);
+  });
+
+  // Console para ver la estructura de las solicitudes
+  console.log('🔍 Mis Solicitudes:', misSolicitudes);
 
   const handleConfirmarReprogramacion = (solicitudId) => {
     if (window.confirm("¿Aceptas la nueva fecha y horario propuestos por el profesor?")) {
@@ -99,7 +108,12 @@ const MisSolicitudes = () => {
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Icon name="UserCheck" size={18} className="text-blue-500" />
-                    <strong>Profesor:</strong> {solicitud.professor?.user?.name || 'No asignado'}
+                    <strong>Profesor:</strong> {
+                      solicitud.professor?.user?.name || 
+                      solicitud.professor?.name || 
+                      solicitud.professorName || 
+                      'No asignado'
+                    }
                   </div>
                   <div className="flex items-center gap-2">
                     <Icon name="Calendar" size={18} className="text-blue-500" />

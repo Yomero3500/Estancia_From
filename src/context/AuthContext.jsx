@@ -16,60 +16,51 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   // URL base de la API
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const API_BASE_URL = 'http://localhost:3002';
+  const API_DOCENTES_URL = 'http://localhost:3001';
+  const API_ENTRADAS_URL = 'http://localhost:5000/api';
 
   useEffect(() => {
-    // Verificar si hay una sesión guardada
-    const savedUser = localStorage.getItem('user');
-    const savedUserType = localStorage.getItem('userType');
-    const savedToken = localStorage.getItem('token');
+    // Cargar usuario de localStorage cuando se monta el componente
+    const savedUser = localStorage.getItem("user");
+    const savedUserType = localStorage.getItem("userType");
     
-    if (savedUser && savedUserType && savedToken) {
-      setUser(JSON.parse(savedUser));
-      setUserType(savedUserType);
-      // Verificar que el token siga siendo válido
-      verifyToken(savedToken);
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const verifyToken = async (token) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setUser(data.data);
-          setUserType(data.data.role);
-        } else {
-          // Token inválido, limpiar datos
-          logout();
-        }
-      } else {
-        // Token inválido, limpiar datos
-        logout();
+    if (savedUser && savedUserType) {
+      try {
+        setUser(JSON.parse(savedUser));
+        setUserType(savedUserType);
+      } catch (error) {
+        console.error('Error al cargar usuario guardado:', error);
+        localStorage.removeItem("user");
+        localStorage.removeItem("userType");
       }
-    } catch (error) {
-      console.error('Error verificando token:', error);
-      logout();
-    } finally {
-      setIsLoading(false);
     }
-  };
+    setIsLoading(false);
+  }, []);
 
   const login = async (email, password, type) => {
     try {
       setIsLoading(true);
       
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      // Mapear tipo de usuario a endpoint específico
+      const endpointMap = {
+        'student': '/alumnos/login',
+        'professor': '/usuarios/login',
+        'director': '/usuarios/login',
+        'encargado_criterio': '/encargados-criterio/login'
+      };
+
+      const endpoint = endpointMap[type];
+      if (!endpoint) {
+        return {
+          success: false,
+          error: 'Tipo de usuario no válido'
+        };
+      }
+
+      const baseUrl = (type === 'professor' || type === 'director') ? API_DOCENTES_URL : API_BASE_URL;
+
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -79,8 +70,58 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      if (response.ok && data.success) {
-        const { user: loggedInUser, token } = data.data;
+      if (response.ok) {
+        // Para profesores y directores, la respuesta es { user: {...}, message: "..." }
+        // Para estudiantes, puede ser { success: true, data: {...} }
+        const responseData = data.user || data.data || data;
+        
+        // Normalizar la estructura del usuario según el endpoint
+        let loggedInUser;
+        let token;
+
+        // Los endpoints de alumnos devuelven: id, name, email, estatus, tutor_academico_id, cohorte_id
+        if (type === 'student') {
+          loggedInUser = {
+            id: responseData.id,
+            email: responseData.email,
+            name: responseData.name, // El backend devuelve "name", no "nombre"
+            role: 'student',
+            student: {
+              id: responseData.id,
+              studentCode: responseData.id, // La matrícula es el id del estudiante
+              status: responseData.estatus,
+              cohortId: responseData.cohorte_id,
+              tutorId: responseData.tutor_academico_id
+            }
+          };
+          token = data.token; // El token viene en el nivel superior de data
+        } else if (type === 'professor') {
+          // Para profesores
+          loggedInUser = {
+            id: responseData.id,
+            email: responseData.email,
+            name: responseData.nombre,
+            role: 'professor',
+            professor: {
+              id: responseData.id,
+              name: responseData.nombre,
+              email: responseData.email,
+              telefono: responseData.telefono,
+              estado: responseData.estado,
+              roles: responseData.roles
+            }
+          };
+          token = responseData.token || data.token || 'default_token';
+        } else {
+          // Para directores y encargados
+          loggedInUser = responseData.user || responseData;
+          token = responseData.token || data.token;
+          
+          // Si no tiene role definido, asignarlo
+          if (!loggedInUser.role) {
+            loggedInUser.role = type;
+          }
+        }
 
         // Verificar que el tipo de usuario coincida
         if (loggedInUser.role !== type) {
@@ -95,6 +136,13 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem("user", JSON.stringify(loggedInUser));
         localStorage.setItem("userType", loggedInUser.role);
         localStorage.setItem("token", token);
+
+        // Mostrar en consola lo guardado en localStorage
+        console.log('=== DATOS GUARDADOS EN LOCALSTORAGE ===');
+        console.log('user:', JSON.parse(localStorage.getItem("user")));
+        console.log('userType:', localStorage.getItem("userType"));
+        console.log('token:', localStorage.getItem("token"));
+        console.log('========================================');
 
         return { success: true };
       } else {
@@ -114,27 +162,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        await fetch(`${API_BASE_URL}/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Error durante el logout:', error);
-    } finally {
-      setUser(null);
-      setUserType(null);
-      localStorage.removeItem('user');
-      localStorage.removeItem('userType');
-      localStorage.removeItem('token');
-    }
+  const logout = () => {
+    setUser(null);
+    setUserType(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('userType');
+    localStorage.removeItem('token');
+    localStorage.removeItem('userID');
+    
+    // Redirigir al login externo
+    window.location.href = 'http://localhost:5173/login';
   };
 
   const getAuthHeaders = () => {
@@ -158,7 +195,7 @@ export const AuthProvider = ({ children }) => {
     isStudent: user?.role === 'student',
     isProfesor: user?.role === 'professor',
     isDirector: user?.role === 'director',
-    API_BASE_URL
+    API_ENTRADAS_URL
   };
 
   return (

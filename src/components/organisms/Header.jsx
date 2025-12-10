@@ -8,14 +8,41 @@ import CustomButton from '../atoms/CustomButton';
 const Header = () => {
   const { user, logout } = useAuth();
 
+  const getHomeUrl = () => {
+    if (!user) return 'http://localhost:5173/login';
+    
+    switch (user.role) {
+      case 'professor':
+        return 'http://localhost:5173/docente/home';
+      case 'student':
+        return 'http://localhost:5173/alumno/home';
+      case 'director':
+        return 'http://localhost:5173/director/home';
+      case 'encargado_criterio':
+        return 'http://localhost:5173/encargado/home';
+      default:
+        return 'http://localhost:5173/login';
+    }
+  };
+
   const renderUserInfo = () => {
     if (!user) return null;
 
-    if (user.role === 'student' && user.student) {
-      const matricula = user.student.studentCode || 'Sin Matrícula';
-      const nombre = user.name || 'Estudiante';
-      const cuatrimestre = user.student.semester ? `${user.student.semester}º Cuatrimestre` : '';
-      const displayText = `${matricula} - ${nombre} (${cuatrimestre})`;
+    if (user.role === 'student') {
+      // Obtener matrícula - el backend devuelve el id como matrícula
+      const matricula = user.student?.studentCode || 
+                       user.id || 
+                       'Sin Matrícula';
+      
+      // El nombre viene directamente en user.name
+      const nombre = user.name || 'Sin Nombre';
+      
+      // Obtener cuatrimestre si existe
+      const cuatrimestre = user.student?.semester ? `${user.student.semester}º Cuatrimestre` : '';
+      
+      const displayText = cuatrimestre 
+        ? `${matricula} - ${nombre} (${cuatrimestre})`
+        : `${matricula} - ${nombre}`;
 
       return (
         <>
@@ -28,7 +55,7 @@ const Header = () => {
     }
 
     const roleName = user.role.charAt(0).toUpperCase() + user.role.slice(1);
-    const displayName = `${roleName}: ${user.name || ''}`;
+    const displayName = `${roleName}: ${user.name || user.nombre || ''}`;
 
     return (
       <>
@@ -73,6 +100,21 @@ const Header = () => {
             {renderUserInfo()}
           </div>
         </div>
+        
+        <CustomButton
+          variant="secondary"
+          size="sm"
+          icon="Home"
+          onClick={() => window.location.href = getHomeUrl()}
+          className=""
+          style={{
+            background: 'var(--color-secondary)',
+            border: '1px solid var(--color-gray-light)',
+            color: 'var(--color-white)'
+          }}
+        >
+          Inicio
+        </CustomButton>
         
         <CustomButton
           variant="secondary"

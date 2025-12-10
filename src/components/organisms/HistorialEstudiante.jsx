@@ -11,11 +11,17 @@ const HistorialEstudiante = () => {
   const { user } = useAuth();
   const { solicitudes } = useAppData();
 
-  const studentId = user?.student?.id;
+  // Obtener el studentId de diferentes ubicaciones posibles
+  const studentId = user?.student?.id || user?.id || user?.student?.studentCode;
 
-  const historial = solicitudes.filter(s => 
-    s.studentId === studentId && ['completed', 'rejected'].includes(s.status)
-  );
+  const historial = solicitudes.filter(s => {
+    // Comparar considerando que pueden ser strings o números
+    const solicitudStudentId = String(s.studentId);
+    const currentStudentId = String(studentId);
+    
+    return solicitudStudentId === currentStudentId && 
+           ['completed', 'rejected'].includes(s.status);
+  });
 
   // ==================================================================
   // ¡NUEVA FUNCIÓN PARA TRADUCIR ESTADOS!

@@ -11,4 +11,8 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    port: 5174, // Cambia este número al puerto que desees
+    strictPort: false, // Si el puerto está ocupado, usa el siguiente disponible
+  },
 })

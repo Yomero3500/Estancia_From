@@ -7,9 +7,11 @@ import CustomButton from '../atoms/CustomButton';
 import Icon from '../atoms/Icon';
 
 const RegistrarAsesoriaImpartida = () => {
-  const { user, getAuthHeaders, API_BASE_URL } = useAuth();
+  const { user, getAuthHeaders, API_ENTRADAS_URL } = useAuth();
   const { profesores } = useAppData();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [studentFound, setStudentFound] = useState(null);
   const [formData, setFormData] = useState({
     fecha: '',
     horaInicio: '',
@@ -19,7 +21,8 @@ const RegistrarAsesoriaImpartida = () => {
     tipoAsesoria: 'individual',
     descripcion: '',
     estudianteNombre: '',
-    estudianteEmail: ''
+    estudianteEmail: '',
+    studentId: null // Guardar el ID del estudiante encontrado
   });
 
   // Opciones para tipo de asesoría
@@ -42,6 +45,71 @@ const RegistrarAsesoriaImpartida = () => {
       ...prev,
       [field]: value
     }));
+  };
+
+  // Buscar estudiante por email
+  const buscarEstudiantePorEmail = async (email) => {
+    if (!email || !email.includes('@')) {
+      setStudentFound(null);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const response = await fetch(`http://localhost:3002/alumnos/email/${encodeURIComponent(email)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setStudentFound(result.data);
+          // Autocompletar el nombre y guardar el studentId
+          setFormData(prev => ({
+            ...prev,
+            estudianteNombre: result.data.nombre,
+            studentId: result.data.matricula // Usar matrícula como studentId
+          }));
+        } else {
+          setStudentFound(null);
+          setFormData(prev => ({
+            ...prev,
+            estudianteNombre: '',
+            studentId: null
+          }));
+        }
+      } else {
+        setStudentFound(null);
+        setFormData(prev => ({
+          ...prev,
+          estudianteNombre: '',
+          studentId: null
+        }));
+      }
+    } catch (error) {
+      console.error('Error buscando estudiante:', error);
+      setStudentFound(null);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Manejar cambio en el campo de email con búsqueda automática
+  const handleEmailChange = (email) => {
+    setFormData(prev => ({
+      ...prev,
+      estudianteEmail: email
+    }));
+    
+    // Buscar automáticamente cuando el email parece completo
+    if (email.includes('@') && email.length > 5) {
+      buscarEstudiantePorEmail(email);
+    } else {
+      setStudentFound(null);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -73,19 +141,19 @@ const RegistrarAsesoriaImpartida = () => {
 
     try {
       const asesoriaData = {
+        professorId: user.professor.id,
         date: formData.fecha,
-        timeSlot: `${formData.horaInicio} - ${formData.horaFin}`,
+        timeSlot: `${formData.horaInicio}-${formData.horaFin}`,
         subject: formData.materia,
         topic: formData.tema,
         type: formData.tipoAsesoria,
         description: formData.descripcion,
         studentName: formData.estudianteNombre,
-        studentEmail: formData.estudianteEmail,
-        status: 'completed', // Marcar como completada ya que ya fue impartida
-        isManualEntry: true // Indicar que es una entrada manual
+        studentEmail: formData.estudianteEmail || undefined,
+        studentId: formData.studentId || undefined // Incluir studentId si se encontró
       };
 
-      const response = await fetch(`${API_BASE_URL}/advisories/manual`, {
+      const response = await fetch(`${API_ENTRADAS_URL}/advisories/manual`, {
         method: 'POST',
         headers: {
           ...getAuthHeaders(),
@@ -113,8 +181,10 @@ const RegistrarAsesoriaImpartida = () => {
         tipoAsesoria: 'individual',
         descripcion: '',
         estudianteNombre: '',
-        estudianteEmail: ''
+        estudianteEmail: '',
+        studentId: null
       });
+      setStudentFound(null);
 
     } catch (error) {
       console.error('Error registrando asesoría:', error);
@@ -204,6 +274,38 @@ const RegistrarAsesoriaImpartida = () => {
               required
             />
 
+            <div className="relative">
+              <FormGroup
+                label="Email del Estudiante"
+                icon="Mail"
+                type="email"
+                value={formData.estudianteEmail}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                placeholder="ejemplo@ids.upchiapas.edu.mx"
+              />
+              {isSearching && (
+                <div className="absolute right-3 top-10 text-blue-500">
+                  <Icon name="Loader" size={20} className="animate-spin" />
+                </div>
+              )}
+              {studentFound && (
+                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                  <Icon name="CheckCircle" size={18} className="text-green-600" />
+                  <span className="text-sm text-green-700">
+                    Estudiante encontrado: <strong>{studentFound.nombre}</strong> (Matrícula: {studentFound.matricula})
+                  </span>
+                </div>
+              )}
+              {formData.estudianteEmail && !isSearching && !studentFound && formData.estudianteEmail.includes('@') && (
+                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
+                  <Icon name="AlertCircle" size={18} className="text-yellow-600" />
+                  <span className="text-sm text-yellow-700">
+                    Estudiante no encontrado en el sistema. Ingrese el nombre manualmente.
+                  </span>
+                </div>
+              )}
+            </div>
+
             <FormGroup
               label="Nombre del Estudiante"
               icon="User"
@@ -212,15 +314,7 @@ const RegistrarAsesoriaImpartida = () => {
               onChange={(e) => handleInputChange('estudianteNombre', e.target.value)}
               placeholder="Nombre completo del estudiante"
               required
-            />
-
-            <FormGroup
-              label="Email del Estudiante (Opcional)"
-              icon="Mail"
-              type="email"
-              value={formData.estudianteEmail}
-              onChange={(e) => handleInputChange('estudianteEmail', e.target.value)}
-              placeholder="email@ejemplo.com"
+              disabled={studentFound !== null}
             />
           </div>
 
@@ -261,8 +355,10 @@ const RegistrarAsesoriaImpartida = () => {
                     tipoAsesoria: 'individual',
                     descripcion: '',
                     estudianteNombre: '',
-                    estudianteEmail: ''
+                    estudianteEmail: '',
+                    studentId: null
                   });
+                  setStudentFound(null);
                 }
               }}
             >

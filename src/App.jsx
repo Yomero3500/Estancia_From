@@ -1,75 +1,32 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 import { AppDataProvider } from './context/AppDataContext';
-import ProtectedRoute from './components/organisms/ProtectedRoute';
 import Login from './components/organisms/Login';
 import EstudianteDashboard from './pages/EstudianteDashboard';
 import ProfesorDashboard from './pages/ProfesorDashboard';
 import DirectorDashboard from './pages/DirectorDashboard';
+import ProtectedRoute from './components/organisms/ProtectedRoute';
 import './App.css';
-
-// Componente para redireccionar según el tipo de usuario
-const DashboardRedirect = () => {
-  const { userType, isAuthenticated } = useAuth();
-  
-  if (!isAuthenticated) {
-    return <Login />;
-  }
-  
-  if (userType === 'student') {
-    return <Navigate to="/estudiante" replace />;
-  } else if (userType === 'professor') {
-    return <Navigate to="/profesor" replace />;
-  } else if (userType === 'director') {
-    return <Navigate to="/director" replace />;
-  }
-  
-  return <Login />;
-};
 
 function AppContent() {
   return (
     <Router>
       <Routes>
-        {/* Ruta principal - redirecciona según el tipo de usuario */}
-        <Route path="/" element={<DashboardRedirect />} />
-        
+        {/* Ruta principal - redirige a login */}
         {/* Ruta de login */}
-        <Route path="/login" element={<Login />} />
-        
+
         {/* Rutas protegidas para estudiantes */}
-        <Route 
-          path="/estudiante" 
-          element={
-            <ProtectedRoute requiredUserType="student">
-              <EstudianteDashboard />
-            </ProtectedRoute>
-          } 
-        />
+        <Route path="/estudiante" element={<EstudianteDashboard />} />
         
         {/* Rutas protegidas para profesores */}
-        <Route 
-          path="/profesor" 
-          element={
-            <ProtectedRoute requiredUserType="professor">
-              <ProfesorDashboard />
-            </ProtectedRoute>
-          } 
-        />
+        <Route path="/profesor" element={<ProfesorDashboard />} />
         
         {/* Rutas protegidas para director */}
-        <Route 
-          path="/director" 
-          element={
-            <ProtectedRoute requiredUserType="director">
-              <DirectorDashboard />
-            </ProtectedRoute>
-          } 
-        />
+        <Route path="/director" element={<DirectorDashboard />} />
         
-        {/* Ruta catch-all - redirecciona a la página principal */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Ruta catch-all - redirecciona a login */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

@@ -10,7 +10,13 @@ export const useAppData = () => {
 };
 
 export const AppDataProvider = ({ children }) => {
-  const { getAuthHeaders, API_BASE_URL, user } = useAuth();
+  const { getAuthHeaders, user } = useAuth();
+  // URL base para asesorías y datos académicos (puerto 3002)
+  const API_BASE_URL = 'http://localhost:3002';
+  // URL base para datos de docentes (puerto 3001)
+  const API_DOCENTES_URL = 'http://localhost:3001';
+
+  const API_ENTRADAS_URL = 'http://localhost:5000/api';
   const [solicitudes, setSolicitudes] = useState([]);
   const [horarios, setHorarios] = useState({});
   const [profesores, setProfesores] = useState([]);
@@ -26,7 +32,7 @@ export const AppDataProvider = ({ children }) => {
       if (userRole === 'professor' && user.professor?.id) {
         try {
           const professorId = user.professor.id;
-          const res = await fetch(`${API_BASE_URL}/schedules/my-schedules`, {
+          const res = await fetch(`${API_ENTRADAS_URL}/schedules/my-schedules?professorId=${professorId}`, {
             headers: getAuthHeaders(),
           });
           if (!res.ok) throw new Error(`Error al cargar horarios: ${res.status}`);
@@ -51,19 +57,24 @@ export const AppDataProvider = ({ children }) => {
       try {
         let url = null;
         if (userRole === 'student' && user.student?.id) {
-          url = `${API_BASE_URL}/advisories/student/${user.student.id}`;
+          url = `${API_ENTRADAS_URL}/advisories/student/${user.student.id}`;
         } else if (userRole === 'professor' && user.professor?.id) {
-          url = `${API_BASE_URL}/advisories/professor/${user.professor.id}`;
+          url = `${API_ENTRADAS_URL}/advisories/professor/${user.professor.id}`;
         } else if (userRole === 'director') {
           // El director necesita el historial completo con toda la información
-          url = `${API_BASE_URL}/advisories/history/director`; 
+          url = `${API_ENTRADAS_URL}/advisories/history/director`; 
         }
         
-        if (!url) return; // Si no hay URL, no hacemos la llamada.
+        if (!url) {
+          console.log('❌ No se generó URL para solicitudes. User:', user);
+          return; // Si no hay URL, no hacemos la llamada.
+        }
 
+        console.log('🔵 Cargando solicitudes desde:', url);
         const res = await fetch(url, { headers: getAuthHeaders() });
         if (!res.ok) throw new Error(`Error al cargar solicitudes: ${res.status}`);
         const data = await res.json();
+        console.log('✅ Solicitudes recibidas del backend:', data);
         
         // Procesamos las solicitudes para asegurar que tengan toda la información necesaria
         const solicitudesProcesadas = (data.data || []).map(solicitud => {
@@ -86,6 +97,20 @@ export const AppDataProvider = ({ children }) => {
             studentMatricula = `EST-${solicitud.student.id}`;
           }
 
+          // Buscar el nombre del profesor en el array de profesores cargados
+          let professorName = 'No asignado';
+          if (solicitud.professor?.user?.name) {
+            professorName = solicitud.professor.user.name;
+          } else if (solicitud.professorName) {
+            professorName = solicitud.professorName;
+          } else if (solicitud.professorId) {
+            // Buscar en el array de profesores por ID
+            const profesor = profesores.find(p => p.id === solicitud.professorId);
+            if (profesor) {
+              professorName = profesor.name;
+            }
+          }
+
           return {
             ...solicitud,
             // Normalizamos la matrícula del estudiante
@@ -93,13 +118,16 @@ export const AppDataProvider = ({ children }) => {
             // Aseguramos que tenga las observaciones
             observations: solicitud.observations || solicitud.observaciones || solicitud.description || solicitud.rejectionReason || '',
             // Mantenemos compatibilidad con nombres anteriores
-            studentName: solicitud.student?.user?.name || solicitud.studentName || 'N/A',
-            professorName: solicitud.professor?.user?.name || solicitud.professorName || 'N/A',
+            studentName: solicitud.student?.user?.name || solicitud.studentName,
+            professorName: professorName,
           };
         });
         
-        console.log('Solicitudes procesadas con matrículas:', solicitudesProcesadas.map(s => ({ 
-          id: s.id, 
+        console.log('✅ Solicitudes procesadas:', solicitudesProcesadas.length, 'solicitudes');
+        console.log('📋 Detalle de solicitudes:', solicitudesProcesadas.map(s => ({ 
+          id: s.id,
+          studentId: s.studentId,
+          status: s.status,
           studentName: s.studentName, 
           matricula: s.studentMatricula 
         })));
@@ -112,21 +140,39 @@ export const AppDataProvider = ({ children }) => {
 
     const fetchProfesores = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/users/professors`, { headers: getAuthHeaders() });
+        console.log('🔵 Cargando profesores desde:', `${API_DOCENTES_URL}/usuarios/profesores/listar`);
+        const res = await fetch(`${API_DOCENTES_URL}/usuarios/profesores/listar`, { headers: getAuthHeaders() });
         if (!res.ok) throw new Error(`Error al cargar profesores: ${res.status}`);
         const data = await res.json();
-        setProfesores(data.data || []);
+        console.log('✅ Profesores recibidos del backend:', data);
+        // Mapear la estructura del backend: { id, nombre, tipo, email, telefono, estado }
+        // A la estructura esperada por la app: { id, name }
+        const profesoresMapeados = (data || []).map(profesor => ({
+          id: profesor.id,
+          name: profesor.nombre,
+          email: profesor.email,
+          telefono: profesor.telefono,
+          estado: profesor.estado,
+          tipo: profesor.tipo
+        }));
+        console.log('✅ Profesores mapeados:', profesoresMapeados);
+        setProfesores(profesoresMapeados);
       } catch (err) {
         console.error('No se pudieron cargar los profesores:', err);
       }
     };
 
-    // Ejecutamos todas las cargas de datos.
-    fetchHorarios();
-    fetchSolicitudes();
-    fetchProfesores();
+    // Ejecutamos las cargas de datos.
+    // Primero cargamos profesores, luego horarios y solicitudes
+    const loadData = async () => {
+      await fetchProfesores();
+      fetchHorarios();
+      fetchSolicitudes();
+    };
+    
+    loadData();
 
-  }, [user, API_BASE_URL, getAuthHeaders]);
+  }, [user, API_BASE_URL, API_DOCENTES_URL, getAuthHeaders]);
 
   // Guardar en localStorage (sin cambios)
   useEffect(() => localStorage.setItem('solicitudes', JSON.stringify(solicitudes)), [solicitudes]);
@@ -136,21 +182,39 @@ export const AppDataProvider = ({ children }) => {
   // Funciones CRUD
   const agregarSolicitud = async (solicitud) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/advisories`, {
+      console.log('🔵 Enviando solicitud a:', `${API_ENTRADAS_URL}/advisories`);
+      console.log('📤 Datos enviados:', solicitud);
+      const res = await fetch(`${API_ENTRADAS_URL}/advisories`, {
         method: 'POST',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(solicitud),
       });
-      if (!res.ok) throw new Error(`Error al enviar la solicitud: ${res.status}`);
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error('❌ Error al enviar solicitud:', res.status, errorData);
+        throw new Error(`Error al enviar la solicitud: ${res.status}`);
+      }
       const nuevaSolicitud = await res.json();
+      console.log('✅ Solicitud creada exitosamente:', nuevaSolicitud);
       
       // Procesamos la nueva solicitud para incluir la información completa
+      // Buscar el nombre del profesor en el array de profesores
+      let professorName = 'No asignado';
+      if (nuevaSolicitud.professor?.user?.name) {
+        professorName = nuevaSolicitud.professor.user.name;
+      } else if (nuevaSolicitud.professorId) {
+        const profesor = profesores.find(p => p.id === nuevaSolicitud.professorId);
+        if (profesor) {
+          professorName = profesor.name;
+        }
+      }
+
       const solicitudProcesada = {
         ...nuevaSolicitud,
         studentMatricula: nuevaSolicitud.student?.matricula || 'N/A',
         observations: nuevaSolicitud.observations || '',
-        studentName: nuevaSolicitud.student?.user?.name || 'N/A',
-        professorName: nuevaSolicitud.professor?.user?.name || 'N/A',
+        studentName: nuevaSolicitud.student?.user?.name,
+        professorName: professorName,
       };
       
       setSolicitudes(prev => [...prev, solicitudProcesada]);
@@ -163,7 +227,7 @@ export const AppDataProvider = ({ children }) => {
 
   const actualizarSolicitud = async (id, updates) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/advisories/${id}/status`, {
+      const res = await fetch(`${API_ENTRADAS_URL}/advisories/${id}/status`, {
         method: 'PUT',
         headers: {
           ...getAuthHeaders(),
@@ -208,7 +272,7 @@ export const AppDataProvider = ({ children }) => {
     try {
       if (!horario.dayOfWeek) throw new Error("El campo 'dayOfWeek' es requerido");
 
-      const res = await fetch(`${API_BASE_URL}/schedules`, {
+      const res = await fetch(`${API_ENTRADAS_URL}/schedules`, {
         method: 'POST',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -292,15 +356,23 @@ export const AppDataProvider = ({ children }) => {
 
   const generarHorariosDisponibles = async (professorId, date) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/schedules/available/${professorId}/${date}`, {
+      const url = `${API_ENTRADAS_URL}/schedules/available/${professorId}/${date}`;
+      console.log('🔵 Obteniendo horarios disponibles desde:', url);
+      const res = await fetch(url, {
         headers: getAuthHeaders(),
       });
 
-      if (!res.ok) throw new Error(`Error al obtener horarios disponibles: ${res.status}`);
-      const data = await res.json();
-      return data.data || [];
+      if (!res.ok) {
+        console.error('❌ Error al obtener horarios:', res.status);
+        throw new Error(`Error al obtener horarios disponibles: ${res.status}`);
+      }
+      const result = await res.json();
+      console.log('✅ Horarios disponibles recibidos:', result);
+      
+      // La respuesta tiene la estructura: { success: true, message: "...", data: [...] }
+      return result.data || [];
     } catch (err) {
-      console.error(err);
+      console.error('Error al obtener horarios disponibles:', err);
       return [];
     }
   };

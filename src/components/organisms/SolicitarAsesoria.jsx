@@ -41,7 +41,7 @@ const SolicitarAsesoria = () => {
   useEffect(() => {
     const fetchHorarios = async () => {
       if (formData.profesorId && formData.fecha) {
-        const horarios = await generarHorariosDisponibles(parseInt(formData.profesorId), formData.fecha);
+        const horarios = await generarHorariosDisponibles(formData.profesorId, formData.fecha);
         setHorariosDisponibles(horarios || []);
         setFormData(prev => ({ ...prev, horario: '' }));
       } else {
@@ -75,11 +75,17 @@ const SolicitarAsesoria = () => {
     // --- ¡LA CORRECCIÓN DE ZONA HORARIA ESTÁ AQUÍ! ---
     const fechaUTC = new Date(formData.fecha + 'T00:00:00');
 
+    // Obtener el studentId del usuario autenticado
+    const studentId = user.student?.id || user.id || user.student?.studentCode;
+
     const solicitud = {
+      studentId: studentId,
+      studentName: user.name, // Agregar nombre del estudiante
+      studentEmail: user.email, // Agregar email del estudiante
       date: fechaUTC,
       subject: formData.materia,
       topic: formData.tema,
-      professorId: parseInt(formData.profesorId),
+      professorId: formData.profesorId,
       timeSlot: timeSlotString,
       type: formData.tipo,
       description: formData.descripcion,
