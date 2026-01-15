@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import FormGroup from '../molecules/FormGroup';
 import CustomButton from '../atoms/CustomButton';
@@ -11,7 +12,23 @@ const Login = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+  const navigate = useNavigate();
+
+  // Si ya hay un usuario autenticado, redirigirlo a su dashboard
+  useEffect(() => {
+    if (user) {
+      const routeMap = {
+        'student': '/estudiante',
+        'professor': '/profesor',
+        'director': '/director',
+        'encargado_criterio': '/director'
+      };
+      
+      const route = routeMap[user.role] || '/estudiante';
+      navigate(route, { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,11 +51,21 @@ const Login = () => {
 
     const result = await login(email, password, userType);
     
-    if (!result.success) {
+    if (result.success) {
+      // Redirigir directamente basado en el tipo de usuario
+      const routeMap = {
+        'student': '/estudiante',
+        'professor': '/profesor',
+        'director': '/director',
+        'encargado_criterio': '/director'
+      };
+      
+      const route = routeMap[userType] || '/estudiante';
+      navigate(route, { replace: true });
+    } else {
       setError(result.error);
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   const handleUserTypeChange = (type) => {

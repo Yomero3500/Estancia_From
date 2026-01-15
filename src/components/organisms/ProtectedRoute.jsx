@@ -1,9 +1,9 @@
 import React from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import Login from './Login';
 
-const ProtectedRoute = ({ children, requiredUserType = null }) => {
-  const { isAuthenticated, userType, isLoading } = useAuth();
+const ProtectedRoute = ({ children, requiredRole = null }) => {
+  const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -16,11 +16,11 @@ const ProtectedRoute = ({ children, requiredUserType = null }) => {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Login />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  if (requiredUserType && userType !== requiredUserType) {
+  if (requiredRole && user.role !== requiredRole) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
         <div className="text-center p-8 bg-white rounded-2xl shadow-lg">

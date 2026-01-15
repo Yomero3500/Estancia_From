@@ -163,16 +163,13 @@ const SolicitudesRecibidas = () => {
                   <Icon name="User" size={18} className="text-blue-500 mt-1" />
                   <div>
                     <strong>Estudiante:</strong>
-                    {solicitud.student?.user ? (
-                      <div className="text-gray-700">
-                        <p>{solicitud.student.user.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {solicitud.student.studentCode} | {solicitud.student.semester}º Cuatrimestre
-                        </p>
-                      </div>
-                    ) : (
-                      ' No disponible'
-                    )}
+                    <div className="text-gray-700">
+                      <p>{solicitud.studentName || solicitud.student?.user?.name || 'No disponible'}</p>
+                      <p className="text-sm text-gray-500">
+                        {solicitud.studentMatricula || solicitud.student?.studentCode}
+                        {solicitud.student?.semester && ` | ${solicitud.student.semester}º Cuatrimestre`}
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -193,7 +190,7 @@ const SolicitudesRecibidas = () => {
                   <Icon name="MessageSquare" size={18} className="text-blue-500 mt-1" />
                   <div>
                     <strong>Descripción:</strong>
-                    <p className="text-gray-600 mt-1">{solicitud.description || 'N/A'}</p>
+                    <p className="text-gray-600 mt-1">{solicitud.description}</p>
                   </div>
                 </div>
               </div>
